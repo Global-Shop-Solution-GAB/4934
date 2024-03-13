@@ -1,0 +1,804 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.F_PriceRev..Create
+Gui.F_PriceRev..Caption("Purchase Price Revision [APAC]")
+Gui.F_PriceRev..Size(13020,8805)
+Gui.F_PriceRev..MinX(0)
+Gui.F_PriceRev..MinY(0)
+Gui.F_PriceRev..Position(0,0)
+Gui.F_PriceRev..BackColor(-2147483633)
+Gui.F_PriceRev..MousePointer(0)
+Gui.F_PriceRev..Event(UnLoad,Unload)
+Gui.F_PriceRev.frameRev.Create(Frame)
+Gui.F_PriceRev.frameRev.Size(1050,720)
+Gui.F_PriceRev.frameRev.Position(105,150)
+Gui.F_PriceRev.frameRev.Caption("Revision")
+Gui.F_PriceRev.frameRev.FontSize(9)
+Gui.F_PriceRev.txtRev.Create(TextBox,"",True,810,315,0,120,285,True,2,"Arial",9,-2147483643,1)
+Gui.F_PriceRev.txtRev.Parent("frameRev")
+Gui.F_PriceRev.txtRev.Locked(True)
+Gui.F_PriceRev.framePrice.Create(Frame)
+Gui.F_PriceRev.framePrice.Size(3345,720)
+Gui.F_PriceRev.framePrice.Position(1275,150)
+Gui.F_PriceRev.framePrice.Caption("Purchase Price")
+Gui.F_PriceRev.framePrice.FontSize(9)
+Gui.F_PriceRev.txtCurrency.Create(TextBox,"",True,750,315,0,120,285,True,2,"Arial",9,-2147483643,1)
+Gui.F_PriceRev.txtCurrency.Parent("framePrice")
+Gui.F_PriceRev.txtCurrency.Locked(True)
+Gui.F_PriceRev.txtPrice.Create(TextBox,"",True,2235,315,0,975,285,True,1,"Arial",9,-2147483643,1)
+Gui.F_PriceRev.txtPrice.Parent("framePrice")
+Gui.F_PriceRev.txtPrice.NumericOnly(1)
+Gui.F_PriceRev.txtPrice.Locked(True)
+Gui.F_PriceRev.frameList.Create(Frame)
+Gui.F_PriceRev.frameList.Size(12585,7125)
+Gui.F_PriceRev.frameList.Position(105,1020)
+Gui.F_PriceRev.frameList.Caption("Price Revision List")
+Gui.F_PriceRev.frameList.FontSize(9)
+Gui.F_PriceRev.GsGCList.Create(GsGridControl)
+Gui.F_PriceRev.GsGCList.Size(12360,6750)
+Gui.F_PriceRev.GsGCList.Position(105,270)
+Gui.F_PriceRev.GsGCList.Parent("frameList")
+Gui.F_PriceRev.GsGCList.Event(RowClick,GsGCList_RowClick)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sCurrency.Declare
+V.Global.sPart.Declare
+V.Global.sPO.Declare
+V.Global.sPOLine.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+V.Local.fPrice.Declare
+V.Local.iRev.Declare
+V.Local.sCurrency.Declare
+V.Local.sGSSPart.Declare
+V.Local.sIcon.Declare
+V.Local.sRev.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,15170)
+	'Create new PO
+	F.Intrinsic.Control.CallSub(hook15170)
+'F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,16880)
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,16860)
+	'PO header pre exit
+	F.Intrinsic.Control.If(V.Caller.Switches,=,"O")
+		F.Intrinsic.Control.CallSub(hook16880)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,16870)
+	'PO header pre save
+	F.Intrinsic.Control.If(V.Caller.Switches,=,"O")
+		F.Intrinsic.Control.CallSub(hook16880)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17010)
+	'PO line exit hook
+	F.Intrinsic.Control.If(V.Caller.Switches,=,"U")
+		F.Intrinsic.Control.CallSub(hook17010)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17181)
+	'PO line part change hook
+	F.Intrinsic.Control.CallSub(hook17181)
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17160)
+	'Script 1 button
+	F.Intrinsic.Control.If(V.Passed.000008.Trim,<>,"")
+		F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+		'Check if custom table exists
+		F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+		F.Intrinsic.Control.If(V.Local.bExist,=,False)
+			F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+		F.Intrinsic.Control.EndIf		
+		F.Intrinsic.String.GSSPartString(V.Passed.000008,V.Passed.000009,V.Local.sGSSPart)
+		F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.If(V.Passed.000044.Trim,=,"")
+				'Base currency
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+				V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+				F.ODBC.conx!rst.Close
+				V.Local.fPrice.Set(V.Passed.000022)
+			F.Intrinsic.Control.Else
+				'Foreign currency
+				V.Local.sCurrency.Set(V.Passed.000044)
+				V.Local.fPrice.Set(V.Passed.000046)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+			
+			F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+			F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+				V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+			F.Intrinsic.Control.Else
+				V.Global.sPart.Set(V.Passed.000008.Trim)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.CallSub(setupscreen,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice)
+			
+			Gui.F_PriceRev..Show
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Else
+		F.Intrinsic.UI.Msgbox("Please select part number","Purchase Prive Revision [APAC]")
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17050)
+	'PO line populate
+	V.Passed.000097.Set("Price Rev")
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17060)
+	'PO line pre save
+	F.Intrinsic.Control.If(V.Passed.000008.Trim,<>,"")
+		F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+		'Check if custom table exists
+		F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+		F.Intrinsic.Control.If(V.Local.bExist,=,False)
+			F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+		F.Intrinsic.Control.EndIf		
+		F.Intrinsic.String.GSSPartString(V.Passed.000008,V.Passed.000009,V.Local.sGSSPart)
+		F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.If(V.Passed.000044.Trim,=,"")
+				'Base currency
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+				V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+				F.ODBC.conx!rst.Close
+				V.Local.fPrice.Set(V.Passed.000022)
+			F.Intrinsic.Control.Else
+				'Foreign currency
+				V.Local.sCurrency.Set(V.Passed.000044)
+				V.Local.fPrice.Set(V.Passed.000046)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+			
+			F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+			F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+				V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+			F.Intrinsic.Control.Else
+				V.Global.sPart.Set(V.Passed.000008.Trim)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.CallSub(presaveroutine,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice,"sPart",V.Local.sGSSPart.Trim)
+			
+'			F.Intrinsic.Control.If(V.Caller.Switches,=,"U")
+'				'If update purchase order price, update the price revision for any changes
+'				F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Local.sCurrency.Trim,V.Local.fPrice,V.Local.sSQL)
+'				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+'				F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+'					F.Intrinsic.String.Concat("RV",V.ODBC.conx!rst.FieldVal!price_rev,V.Local.sRev)
+'					F.Intrinsic.String.Build("update po_lines set user_1 = '{2}' where purchase_order = '{0}' and record_no = '{1}'",V.Passed.008002,V.Passed.008001,V.Local.sRev,V.Local.sSQL)
+'					F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+'				F.Intrinsic.Control.EndIf
+'				F.ODBC.conx!rst.Close
+'			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		F.ODBC.Connection!conx.Close
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17070)
+	F.Intrinsic.Control.If(V.Caller.Switches,=,"U")
+'		F.Intrinsic.Control.CallSub(hook17070)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,34410)
+	'Automated PO populate
+	V.Passed.000174.Set("Price Rev")
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,34430)
+	'Script 1 button
+	F.Intrinsic.Control.If(V.Passed.000083.Trim,=,"")
+		F.Intrinsic.UI.Msgbox("Please select vendor","Purchase Prive Revision [APAC]")
+	F.Intrinsic.Control.Else
+		F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+		'Check if custom table exists
+		F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+		F.Intrinsic.Control.If(V.Local.bExist,=,False)
+			F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+		F.Intrinsic.Control.EndIf		
+		F.Intrinsic.String.GSSPartString(V.Passed.000001,V.Passed.000206,V.Local.sGSSPart)
+		F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.If(V.Passed.000121.Trim,=,"N/A")
+				'Base currency
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+				V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+				F.ODBC.conx!rst.Close
+				V.Local.fPrice.Set(V.Passed.000088)
+			F.Intrinsic.Control.Else
+				'Foreign currency
+				F.Intrinsic.String.Build("SELECT default_currency as CURRENCY FROM V_vendor_intl where vendor = '{0}'",V.Passed.000083.Trim,V.Local.sSQL)
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+				V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+				F.ODBC.conx!rst.Close
+				V.Local.fPrice.Set(V.Passed.000082)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+			
+			F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+			F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+				V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+			F.Intrinsic.Control.Else
+				V.Global.sPart.Set(V.Passed.000001.Trim)
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conx!rst.Close
+			F.Intrinsic.Control.CallSub(setupscreen,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice)
+			
+			Gui.F_PriceRev..Show
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,34434)
+	'Automated PO Post Ok
+	F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+		'Check if custom table exists
+		F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+		F.Intrinsic.Control.If(V.Local.bExist,=,False)
+			F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+		F.Intrinsic.Control.EndIf	
+	F.Intrinsic.String.GSSPartString(V.Passed.000001,V.Passed.000206,V.Local.sGSSPart)
+	F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+		F.ODBC.conx!rst.Close
+		F.Intrinsic.Control.If(V.Passed.000121.Trim,=,"N/A")
+			'Base currency
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+			V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+			F.ODBC.conx!rst.Close
+			V.Local.fPrice.Set(V.Passed.000088)
+		F.Intrinsic.Control.Else
+			'Foreign currency
+			F.Intrinsic.String.Build("SELECT default_currency as CURRENCY FROM V_vendor_intl where vendor = '{0}'",V.Passed.000083.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+			V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+			F.ODBC.conx!rst.Close
+			V.Local.fPrice.Set(V.Passed.000082)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+		
+		F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+			V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+		F.Intrinsic.Control.Else
+			V.Global.sPart.Set(V.Passed.000001.Trim)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conx!rst.Close
+		F.Intrinsic.Control.CallSub(presaveroutine,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice,"sPart",V.Local.sGSSPart.Trim)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,50805)
+	'Drop ship populate
+	V.Passed.000107.Set("Price Rev")
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,50855)
+	'Drop ship Script 1
+	F.Intrinsic.Control.If(V.Passed.000001.Trim,<>,"")
+		F.Intrinsic.Control.If(V.Passed.000083.Trim,=,"")
+			F.Intrinsic.UI.Msgbox("Please select vendor","Purchase Prive Revision [APAC]")
+		F.Intrinsic.Control.Else
+			F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+			'Check if custom table exists
+			F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+			F.Intrinsic.Control.If(V.Local.bExist,=,False)
+				F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+			F.Intrinsic.Control.EndIf			
+			F.Intrinsic.String.GSSPartString(V.Passed.000001,V.Passed.0000106,V.Local.sGSSPart)
+			F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+			F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+				F.ODBC.conx!rst.Close
+				
+				'Get base currency
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+				V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+				F.ODBC.conx!rst.Close
+				
+				F.Intrinsic.String.Build("SELECT default_currency as CURRENCY FROM V_vendor_intl where vendor = '{0}'",V.Passed.000083.Trim,V.Local.sSQL)
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.Local.sCurrency.Trim,=,V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+					'Vendor currency is in base currency
+					V.Local.fPrice.Set(V.Passed.000088)
+				F.Intrinsic.Control.Else
+					'Vendor currency is in foreign currency
+					V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+					V.Local.fPrice.Set(V.Passed.000088)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.conx!rst.Close
+				F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+				
+				F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+				F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+					V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+				F.Intrinsic.Control.Else
+					V.Global.sPart.Set(V.Passed.000001.Trim)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.conx!rst.Close
+				F.Intrinsic.Control.CallSub(setupscreen,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice)
+				
+				Gui.F_PriceRev..Show
+			f.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Else
+		F.Intrinsic.UI.Msgbox("Please select part number","Purchase Prive Revision [APAC]")
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,50815)
+	'Drop Ship Post Save
+	F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+	'Check if custom table exists
+	F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+	F.Intrinsic.Control.If(V.Local.bExist,=,False)
+		F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+	F.Intrinsic.Control.EndIf	
+	F.Intrinsic.String.GSSPartString(V.Passed.000001,V.Passed.0000106,V.Local.sGSSPart)
+	F.Intrinsic.String.Build("select part from inventory_mstr where part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+		F.ODBC.conx!rst.Close
+		
+		'Get base currency
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+		V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+		F.ODBC.conx!rst.Close
+		
+		F.Intrinsic.String.Build("SELECT default_currency as CURRENCY FROM V_vendor_intl where vendor = '{0}'",V.Passed.000083.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.Local.sCurrency.Trim,=,V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+			'Vendor currency is in base currency
+			V.Local.fPrice.Set(V.Passed.000088)
+		F.Intrinsic.Control.Else
+			'Vendor currency is in foreign currency
+			V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+			V.Local.fPrice.Set(V.Passed.000082)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conx!rst.Close
+		F.Intrinsic.Math.Add(V.Local.fPrice,0,V.Local.fPrice)
+		
+		F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.Local.sGSSPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+			V.Global.sPart.Set(V.ODBC.conx!rst.FieldValTrim!display_part)
+		F.Intrinsic.Control.Else
+			V.Global.sPart.Set(V.Passed.000001.Trim)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conx!rst.Close
+		
+		F.Intrinsic.Control.CallSub(presaveroutine,"sCurrency",V.Local.sCurrency.Trim,"fPrice",V.Local.fPrice,"sPart",V.Local.sGSSPart.Trim)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.EndIf
+
+'F.ODBC.Connection!conx.Close
+Program.Sub.Main.End
+
+Program.Sub.Hook17181.Start
+V.Local.sCurrency.Declare
+V.Local.sPart.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+'Check if custom table exists
+F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+F.Intrinsic.Control.EndIf
+
+V.Local.sPart.Set(V.Passed.000008)
+
+V.Local.sCurrency.Set(V.Passed.000044)
+
+F.Intrinsic.Control.If(V.Local.sCurrency.Trim,=,"")
+	'Base currency
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+	V.Local.sCurrency.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+	F.ODBC.conx!rst.Close
+F.Intrinsic.Control.Else
+	'Foreign currency
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("select price from gab_4934_price_rev where part = '{0}' and currency = '{1}' order by price_rev desc",V.Local.sPart.Trim,V.Local.sCurrency.Trim,V.Local.sSQL)
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)
+	F.Intrinsic.Control.If(V.Passed.000044.Trim,=,"")
+		V.Passed.000022.Set(V.ODBC.conx!rst.FieldVal!price)
+	F.Intrinsic.Control.Else
+		V.Passed.000046.Set(V.ODBC.conx!rst.FieldVal!price)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Intrinsic.Control.If(V.Passed.000044.Trim,=,"")
+		V.Passed.000022.Set(0)
+	F.Intrinsic.Control.Else
+		V.Passed.000046.Set(0)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+F.ODBC.conx!rst.Close
+
+F.ODBC.Connection!conx.Close
+Program.Sub.Hook17181.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.If(V.DataTable.dtRev.Exists,=,True)
+	F.Data.DataTable.Close("dtRev")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!conx.Close
+F.Intrinsic.Control.End
+
+Program.Sub.Unload.End
+
+Program.Sub.SetupScreen.Start
+V.Local.iRev.Declare
+V.Local.sIcon.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+F.Intrinsic.String.Concat(V.Caller.GlobalDir,"\ART\gss2.ico",V.Local.sIcon)
+Gui.F_PriceRev..Icon(V.Local.sIcon)
+
+F.Intrinsic.String.Build("select top 1 price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' order by price_rev desc",V.Global.sPart.Trim,V.Args.sCurrency.Trim,V.Local.sSQL)
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+'Check if there is revision for the selected part and currency
+F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+	F.ODBC.conx!rst.Close
+	F.Intrinsic.String.Build("select top 1 price_rev as price_rev from gab_4934_price_rev where part = '{0}' order by price_rev desc",V.Global.sPart.Trim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	'No price revision entered for this part in any currency
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+		Gui.F_PriceRev.txtRev.Text("1")
+	'There is price revision found, add 1 to the last revision
+	F.Intrinsic.Control.Else
+		V.Local.iRev.Set(V.ODBC.conx!rst.FieldVal!price_rev)
+		F.Intrinsic.Math.Add(V.Local.iRev,1,V.Local.iRev)
+		Gui.F_PriceRev.txtRev.Text(V.Local.iRev)
+	F.Intrinsic.Control.EndIf
+	Gui.F_PriceRev.txtCurrency.Text(V.Args.sCurrency)
+	Gui.F_PriceRev.txtPrice.Text(V.Args.fPrice)
+	Gui.F_PriceRev.frameList.Enabled(False)
+'There is a revision for the selected part and currency
+F.Intrinsic.Control.Else
+	'If price is entered, check if there is already a revision for the entered price
+	F.Intrinsic.Control.If(V.Args.fPrice,>,0)
+		F.ODBC.conx!rst.Close
+		F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Args.sCurrency.Trim,V.Args.fPrice,V.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		'New price revision
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+			F.Intrinsic.String.Build("select top 1 price_rev as price_rev from gab_4934_price_rev where part = '{0}' order by price_rev desc",V.Global.sPart.Trim,V.Local.sSQL)
+			F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSQL,V.Local.iRev)
+			F.Intrinsic.Math.Add(V.Local.iRev,1,V.Local.iRev)
+			Gui.F_PriceRev.txtRev.Text(V.Local.iRev)
+			Gui.F_PriceRev.txtCurrency.Text(V.Args.sCurrency)
+			Gui.F_PriceRev.txtPrice.Text(V.Args.fPrice)
+		'There is a price revision, hide update button
+		F.Intrinsic.Control.Else
+			Gui.F_PriceRev.txtRev.Text(V.ODBC.conx!rst.FieldVal!price_rev)
+			Gui.F_PriceRev.txtCurrency.Text(V.Args.sCurrency)
+			Gui.F_PriceRev.txtPrice.Text(V.Args.fPrice)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	
+	'Build the grid
+	F.Intrinsic.String.Build("select price_rev as Rev, Currency, Price, userid as UserID, date_update as DateUpdate from gab_4934_price_rev where part = '{0}' and currency = '{1}' order by price_rev desc",V.Global.sPart.Trim,V.Args.sCurrency.Trim,V.Local.sSQL)
+	F.Data.DataTable.CreateFromSQL("dtRev","conx",V.Local.sSQL,True)
+	Gui.F_PriceRev.GsGCList.AddGridviewFromDatatable("gvRev","dtRev")
+	Gui.F_PriceRev.GsGCList.MainView("gvRev")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Rev","HeaderHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Currency","HeaderHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Price","HeaderHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","UserID","HeaderHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","HeaderHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Rev","CellHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Currency","CellHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","UserID","CellHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","CellHAlignment","Center")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","Caption","Date Update")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","DisplayCustomDatetime","g")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Price","DisplayCustomNumeric","##,###,##0.00000")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Rev","MinWidth","60")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Currency","MinWidth","80")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Price","MinWidth","110")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","UserID","MinWidth","100")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","MinWidth","130")
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Rev","AllowEdit",False)
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Currency","AllowEdit",False)
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","Price","AllowEdit",False)
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","UserID","AllowEdit",False)
+	Gui.F_PriceRev.GsGCList.SetColumnProperty("gvRev","DateUpdate","AllowEdit",False)
+F.Intrinsic.Control.EndIf
+F.ODBC.conx!rst.Close
+Program.Sub.SetupScreen.End
+
+Program.Sub.GsGCList_RowClick.Start
+V.Local.sSQL.Declare
+
+'Automated Purchasing
+F.Intrinsic.Control.If(V.Caller.Hook,=,34430)
+	'Base Currency
+	F.Intrinsic.Control.If(V.Passed.000121.Trim,=,"N/A")
+		V.Passed.000088.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	'Foreign Currency
+	F.Intrinsic.Control.Else
+		V.Passed.000082.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	F.Intrinsic.Control.EndIf
+'Drop Ship
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,50855)
+	'Base Currency
+	F.Intrinsic.Control.If(V.Passed.000121.Trim,=,"N/A")
+		V.Passed.000088.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	'Foreign Currency
+	F.Intrinsic.Control.Else
+		V.Passed.000082.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	F.Intrinsic.Control.EndIf
+'PO Manual
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,17160)
+	'Base Currency
+	F.Intrinsic.Control.If(V.Passed.000044.Trim,=,"")
+		V.Passed.000022.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	'Foreign Currency
+	F.Intrinsic.Control.Else
+		V.Passed.000046.Set(V.DataTable.dtRev(V.Args.RowIndex).Price!FieldVal)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(unload)
+Program.Sub.GsGCList_RowClick.End
+
+Program.Sub.txtPrice_Tab.Start
+V.Local.fPrice.Declare
+V.Local.iRev.Declare
+V.Local.sCurrency.Declare
+V.Local.sSQL.Declare
+V.Local.sText.Declare
+V.Local.bExist.Declare
+
+V.Local.fPrice.Set(V.Screen.F_PriceRev!txtPrice.Text)
+F.Intrinsic.Control.If(V.Local.fPrice,=,0)
+	Gui.F_PriceRev.cmdUpdate.Visible(False)
+F.Intrinsic.Control.Else
+	V.Local.sCurrency.Set(V.Screen.F_PriceRev!txtCurrency.Text)
+	F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Local.sCurrency.Trim,V.Local.fPrice,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	'No revision found for the entered price
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+		F.Intrinsic.String.Build("select top 1 price_rev as price_rev from gab_4934_price_rev where part = '{0}' order by price_rev desc",V.Global.sPart.Trim,V.Local.sSQL)
+		F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSQL,V.Local.iRev)
+		F.Intrinsic.Math.Add(V.Local.iRev,1,V.Local.iRev)
+		
+		Gui.F_PriceRev.txtRev.Text(V.Local.iRev)
+		Gui.F_PriceRev.cmdUpdate.Visible(True)
+		F.Intrinsic.String.Format(V.Local.fPrice,"#,0.00000",V.Local.sText)
+		Gui.F_PriceRev.txtPrice.Text(V.Local.sText)
+	'A revision exists
+	F.Intrinsic.Control.Else
+		Gui.F_PriceRev.txtRev.Text(V.ODBC.conx!rst.FieldVal!price_rev)
+		Gui.F_PriceRev.cmdUpdate.Visible(False)
+		F.Intrinsic.String.Format(V.Local.fPrice,"#,0.00000",V.Local.sText)
+		Gui.F_PriceRev.txtPrice.Text(V.Local.sText)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rst.Close
+F.Intrinsic.Control.EndIf
+Program.Sub.txtPrice_Tab.End
+
+Program.Sub.PreSaveRoutine.Start
+V.Local.fPrice.Declare
+V.Local.iRev.Declare
+V.Local.sDateUpdate.Declare
+V.Local.sMessage.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+V.Local.fPrice.Set(V.Args.fPrice)
+
+F.Intrinsic.String.Build("select top 1 price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Args.sCurrency.Trim,V.Local.fPrice,V.Local.sSQL)
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+	'No revision found for the entered price on the respective currency
+	'Retrieve the last price revision
+	F.Intrinsic.String.Build("select top 1 price_rev from gab_4934_price_rev where part = '{0}' order by price_rev desc",V.Global.sPart.Trim,V.Local.sSQL)
+	F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSQL,V.Local.iRev)
+	F.Intrinsic.Math.Add(V.Local.iRev,1,V.Local.iRev)
+	
+	'Insert record into custom table
+	F.Intrinsic.String.Format(V.Ambient.Now,"YYYY-MM-DD HH:NN:SS",V.Local.sDateUpdate)
+	F.Intrinsic.String.Build("insert into gab_4934_price_rev(part,gss_part,price_rev,currency,price,userid,date_update) values('{0}','{1}',{2},'{3}',{4},'{5}','{6}');",V.Global.sPart.Trim,V.Args.sPart,V.Local.iRev,V.Args.sCurrency.Trim,V.Local.fPrice,V.Caller.User,V.Local.sDateUpdate,V.Local.sSQL)
+	F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+	
+	'Notify users about the revision number
+	F.Intrinsic.String.Build("A new purchase price revision has been created: RV{0}",V.Local.iRev,V.Local.sMessage)
+	F.Intrinsic.UI.Msgbox(V.Local.sMessage,"Purchase Prive Revision [APAC]")
+F.Intrinsic.Control.EndIf
+F.ODBC.conx!rst.Close
+Program.Sub.PreSaveRoutine.End
+
+Program.Sub.Hook15170.Start
+V.Local.fPrice.Declare
+V.Local.i1.Declare
+V.Local.sBase.Declare
+V.Local.sCurrency.Declare
+V.Local.sPO.Declare
+V.Local.sRevision.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+F.Intrinsic.String.LPad(V.Passed.009000,"0",7,V.Local.sPO)
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+'Check if custom table exists
+F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+F.Intrinsic.Control.EndIf
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+V.Local.sBase.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+F.ODBC.conx!rst.Close
+
+F.Intrinsic.String.Build("select record_no as line, part, exchange_curr, user_1, cost_6_dec as cost, exchange_cost2 from v_po_lines where purchase_order = '{0}'",V.Local.sPO.Trim,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtPO","conx",V.Local.sSQL)
+F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPO.RowCount--,1)
+	'Verify part number
+	F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		V.Global.sPart.Set(V.ODBC.conx!rstP.FieldValTrim!display_part)
+	F.Intrinsic.Control.Else
+'		V.Global.sPart.Set(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim)
+		F.Intrinsic.String.Left(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,17,V.Global.sPart)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+	
+	'Confirm currency and price
+	F.Intrinsic.Control.If(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim,=,"")
+		V.Local.sCurrency.Set(V.Local.sBase)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).cost!FieldVal)
+	F.Intrinsic.Control.Else
+		V.Local.sCurrency.Set(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).exchange_cost2!FieldVal)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Local.sCurrency,V.Local.fPrice,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRW("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		'Update PO line user field 1 if there is a price revision
+		F.Intrinsic.String.Concat("RV",V.ODBC.conx!rstP.FieldVal!price_rev,V.Local.sRevision)
+		F.Intrinsic.String.Build("update po_lines set user_1 = '{2}' where purchase_order = '{0}' and record_no = '{1}'",V.Local.sPO.Trim,V.DataTable.dtPO(V.Local.i1).line!FieldValTrim,V.Local.sRevision,V.Local.sSQL)
+		F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+F.Intrinsic.Control.Next(V.Local.i1)
+F.Data.DataTable.Close("dtPO")
+
+F.ODBC.Connection!conx.Close
+Program.Sub.Hook15170.End
+
+Program.Sub.Hook16880.Start
+V.Local.bExist.Declare
+V.Local.fPrice.Declare
+V.Local.i1.Declare
+V.Local.sBase.Declare
+V.Local.sCurrency.Declare
+V.Local.sDate.Declare
+V.Local.sFile.Declare
+V.Local.sFileName.Declare
+V.Local.sPO.Declare
+V.Local.sRevision.Declare
+V.Local.sRow.Declare
+V.Local.sSQL.Declare
+
+F.Intrinsic.String.LPad(V.Passed.000008,"0",7,V.Local.sPO)
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+'Check if custom table exists
+F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+F.Intrinsic.Control.EndIf
+
+V.Local.sCurrency.Set(V.Passed.000062)
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+V.Local.sBase.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+F.ODBC.conx!rst.Close
+
+F.Intrinsic.String.Build("select record_no as line, part, exchange_curr, user_1, cost_6_dec as cost, exchange_cost2 from v_po_lines where purchase_order = '{0}'",V.Local.sPO.Trim,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtPO","conx",V.Local.sSQL)
+'F.Intrinsic.Debug.ShowCallerInfo
+F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPO.RowCount--,1)
+	'Verify part number
+	F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		V.Global.sPart.Set(V.ODBC.conx!rstP.FieldValTrim!display_part)
+	F.Intrinsic.Control.Else
+'		V.Global.sPart.Set(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim)
+		F.Intrinsic.String.Left(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,17,V.Global.sPart)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+	
+	'Confirm currency and price
+	F.Intrinsic.Control.If(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim,=,"")
+		V.Local.sCurrency.Set(V.Local.sBase)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).cost!FieldVal)
+	F.Intrinsic.Control.Else
+		V.Local.sCurrency.Set(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).exchange_cost2!FieldVal)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Local.sCurrency,V.Local.fPrice,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRW("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		'Update PO line user field 1 if there is a price revision
+		F.Intrinsic.String.Concat("RV",V.ODBC.conx!rstP.FieldVal!price_rev,V.Local.sRevision)
+		F.Intrinsic.String.Build("update po_lines set user_1 = '{2}' where purchase_order = '{0}' and record_no = '{1}'",V.Local.sPO.Trim,V.DataTable.dtPO(V.Local.i1).line!FieldValTrim,V.Local.sRevision,V.Local.sSQL)
+		F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+F.Intrinsic.Control.Next(V.Local.i1)
+F.Data.DataTable.Close("dtPO")
+
+F.ODBC.Connection!conx.Close
+Program.Sub.Hook16880.End
+
+Program.Sub.Hook17010.Start
+V.Local.fPrice.Declare
+V.Local.i1.Declare
+V.Local.sBase.Declare
+V.Local.sCurrency.Declare
+V.Local.sPO.Declare
+V.Local.sRevision.Declare
+V.Local.sSQL.Declare
+V.Local.bExist.Declare
+
+F.ODBC.Connection!conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+'Check if custom table exists
+F.ODBC.Connection!conx.TableExists("GAB_4934_PRICE_REV",V.Local.bExist)
+F.Intrinsic.Control.If(V.Local.bExist,=,False)
+	F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_4934_PRICE_REV(PART CHAR(50), GSS_PART CHAR(20), PRICE_REV INTEGER,CURRENCY VARCHAR(3),PRICE DOUBLE,USERID VARCHAR(8),DATE_UPDATE DATETIME);")
+F.Intrinsic.Control.EndIf
+F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst","SELECT CURRENCY FROM V_COMPANY_OPT")
+V.Local.sBase.Set(V.ODBC.conx!rst.FieldValTrim!CURRENCY)
+F.ODBC.conx!rst.Close
+
+F.Intrinsic.String.LPad(V.Passed.008002,"0",7,V.Local.sPO)
+F.Intrinsic.String.Build("select record_no as line, part, exchange_curr, user_1, cost_6_dec as cost, exchange_cost2 from v_po_lines where purchase_order = '{0}'",V.Local.sPO.Trim,V.Local.sSQL)
+F.Data.DataTable.CreateFromSQL("dtPO","conx",V.Local.sSQL)
+F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPO.RowCount--,1)
+	'Verify part number
+	F.Intrinsic.String.Build("select display_part from inv_lxr where gss_part = '{0}'",V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		V.Global.sPart.Set(V.ODBC.conx!rstP.FieldValTrim!display_part)
+	F.Intrinsic.Control.Else
+'		V.Global.sPart.Set(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim)
+		F.Intrinsic.String.Left(V.DataTable.dtPO(V.Local.i1).part!FieldValTrim,17,V.Global.sPart)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+	
+	'Confirm currency and price
+	F.Intrinsic.Control.If(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim,=,"")
+		V.Local.sCurrency.Set(V.Local.sBase)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).cost!FieldVal)
+	F.Intrinsic.Control.Else
+		V.Local.sCurrency.Set(V.DataTable.dtPO(V.Local.i1).exchange_curr!FieldValTrim)
+		V.Local.fPrice.Set(V.DataTable.dtPO(V.Local.i1).exchange_cost2!FieldVal)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Build("select price_rev from gab_4934_price_rev where part = '{0}' and currency = '{1}' and price = {2}",V.Global.sPart.Trim,V.Local.sCurrency,V.Local.fPrice,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRW("rstP",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rstP.EOF,=,False)
+		'Update PO line user field 1 if there is a price revision
+		F.Intrinsic.String.Concat("RV",V.ODBC.conx!rstP.FieldVal!price_rev,V.Local.sRevision)
+		F.Intrinsic.String.Build("update po_lines set user_1 = '{2}' where purchase_order = '{0}' and record_no = '{1}'",V.Local.sPO.Trim,V.DataTable.dtPO(V.Local.i1).line!FieldValTrim,V.Local.sRevision,V.Local.sSQL)
+		F.ODBC.Connection!conx.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rstP.Close
+F.Intrinsic.Control.Next(V.Local.i1)
+F.Data.DataTable.Close("dtPO")
+
+F.ODBC.Connection!conx.Close
+Program.Sub.Hook17010.End
+
+Program.Sub.Comments.Start
+${$0$}$Purchase Price Revision Tracking$}$MHERTANTO$}$23/1/2018 1:02:51 PM$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$Customized for HCS Engineering to track purchase price based on part number
+${$5$}$2.0.0.0$}$2
+${$6$}$dyunus$}$20230110132729826$}$xZ6SHi8g7O0Qsxe6AiO2NH3PnOKQRy0Tq7MtRcgK5Df8RZ38uGqN4rUp+clPn6Sj7HpLuuQV/UM=
+Program.Sub.Comments.End
